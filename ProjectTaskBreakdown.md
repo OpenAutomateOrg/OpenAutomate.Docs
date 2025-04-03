@@ -14,7 +14,7 @@ This document provides a comprehensive breakdown of tasks for implementing the O
 
 ## Database & Data Models
 
-- [ ] Select and configure database provider (SQL Server/PostgreSQL)
+- [ ] Select and configure database provider (SQL Server)
 - [ ] Create Entity Framework Core database context
 - [ ] Implement User entity and related models
 - [ ] Implement BotAgent entity and related models
