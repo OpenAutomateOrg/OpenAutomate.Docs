@@ -919,7 +919,7 @@ Understanding when to use Server vs. Client Components in Next.js:
 ### Setting Up the Development Environment
 
 1. **Prerequisites**:
-   - .NET SDK 7.0+
+   - .NET SDK 8.0
    - Node.js 18+
    - SQL Server or PostgreSQL
    - Visual Studio 2022 or VS Code with C# extension
