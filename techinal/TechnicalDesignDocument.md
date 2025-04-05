@@ -364,6 +364,160 @@ sequenceDiagram
   - Python 3.8+
   - Required Python libraries for automation
 
+### 3.6. Authentication and Authorization
+
+#### 3.6.1. Authentication Flow
+
+Authentication in OpenAutomate is implemented using JWT tokens with a refresh token mechanism. The system uses HTTP-only cookies for refresh tokens and a memory-first token storage approach on the frontend.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant TokenService
+    participant RefreshTokenRepository
+    participant Database
+    
+    User->>Frontend: Login with credentials
+    Frontend->>API: POST /api/auth/login
+    API->>TokenService: Generate tokens
+    TokenService->>RefreshTokenRepository: Store refresh token
+    RefreshTokenRepository->>Database: Save token with UserId
+    RefreshTokenRepository-->>TokenService: Token saved
+    TokenService-->>API: Return tokens
+    API-->>Frontend: Return tokens + set HTTP-only cookie
+    Frontend->>User: Login successful
+    
+    Note over User,Frontend: When access token expires
+    
+    Frontend->>API: Request with expired token
+    API-->>Frontend: 401 Unauthorized
+    Frontend->>API: POST /api/auth/refresh-token
+    API->>TokenService: Validate refresh token
+    TokenService->>RefreshTokenRepository: Find token
+    RefreshTokenRepository->>Database: Query token
+    Database-->>RefreshTokenRepository: Return token
+    RefreshTokenRepository-->>TokenService: Token found
+    TokenService->>RefreshTokenRepository: Revoke old token
+    TokenService->>RefreshTokenRepository: Add new token
+    RefreshTokenRepository->>Database: Save changes
+    TokenService-->>API: Return new tokens
+    API-->>Frontend: Return new tokens + set new HTTP-only cookie
+    Frontend->>API: Retry original request
+    API-->>Frontend: Return response
+```
+
+#### 3.6.2. EF Core Query Optimization
+
+When querying refresh tokens, we must be careful with computed properties like `IsExpired` and `IsRevoked` which cannot be translated to SQL by Entity Framework Core. We use a two-step approach:
+
+1. Query the database using only properties that can be translated to SQL
+2. Check computed properties in memory after retrieving the entity
+
+```csharp
+// Correct approach for RefreshToken method
+var token = _unitOfWork.RefreshTokens.GetFirstOrDefaultAsync(
+    t => t.Token == refreshToken, // Only query by database fields
+    t => t.User).GetAwaiter().GetResult();
+    
+// Check computed properties in memory
+if (token == null || token.IsRevoked || token.IsExpired)
+    throw new Exception("Invalid token");
+```
+
+#### 3.6.3. Frontend Provider Architecture
+
+The frontend implements a provider architecture for authentication:
+
+1. **AuthProvider**: A React context provider that manages authentication state
+2. **TenantProvider**: A React context provider that manages tenant context
+3. **Token Storage Strategy**: In-memory token storage with sessionStorage fallback
+
+```tsx
+// Provider composition in application root
+<AuthProvider>
+  <TenantProvider>
+    <App />
+  </TenantProvider>
+</AuthProvider>
+```
+
+#### 3.6.4. Token Storage Strategy
+
+The frontend implements a memory-first token storage strategy:
+
+1. Primary storage: In-memory variable (more secure, not accessible to JavaScript)
+2. Fallback storage: sessionStorage (persists across page refreshes)
+
+```typescript
+// Memory-first token storage
+let inMemoryToken: string | null = null;
+
+export const getAuthToken = (): string | null => {
+  if (inMemoryToken) return inMemoryToken;
+  
+  // Fallback to sessionStorage if memory token is not available
+  const sessionToken = getTokenFromSession();
+  if (sessionToken) {
+    inMemoryToken = sessionToken;
+  }
+  
+  return inMemoryToken;
+};
+```
+
+#### 3.6.5. Server-Side Rendering Considerations
+
+For Next.js applications with server-side rendering (SSR), we implement:
+
+1. Use of 'use client' directive for authentication components
+2. Mounted state to prevent hydration mismatches
+3. Consistent UI rendering for both server and client
+
+```tsx
+// SSR-compatible authentication component
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/hooks/use-auth';
+
+export default function LoginPage() {
+  const [mounted, setMounted] = useState(false);
+  
+  // Set mounted state on client side
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Only render client-specific content after mount
+  if (!mounted) {
+    return <div>Loading...</div>; // Static content for SSR
+  }
+  
+  // Client-side content after mount
+  return (
+    <div>
+      {/* Authentication UI */}
+    </div>
+  );
+}
+```
+
+#### 3.6.6. Authorization
+
+1. **Role-based access control**:
+   - System-level roles: Admin, User
+   - Organization-level roles: Tenant Admin, Manager, User
+
+2. **Permission checks**:
+   - Resource-based permissions
+   - Tenant-scoped permissions
+
+3. **Authorization policies**:
+   - Defined in code with policy providers
+   - Applied using attributes on controller actions
+
 ### 3.7. Security Considerations
 
 - JWT-based authentication for all API access with tenant information embedded in the token
