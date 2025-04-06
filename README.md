@@ -54,7 +54,7 @@ This repository includes comprehensive documentation to help you understand and 
 
 ### Prerequisites
 
-- .NET SDK 7.0+
+- .NET SDK 8.0
 - Node.js 18+
 - SQL Server or PostgreSQL
 - Visual Studio 2022 or VS Code with C# extension
