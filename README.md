@@ -8,28 +8,47 @@ OpenAutomate is an open-source business process automation management platform t
 
 OpenAutomate enables organizations to create, deploy, monitor, and manage automation processes without vendor lock-in or expensive licensing costs. The platform is built with a multi-tenant architecture, allowing multiple organizations to use the system while ensuring data isolation and security between tenants.
 
+### Why OpenAutomate?
+
+- **Cost-Effective**: Eliminate expensive licensing fees from commercial automation platforms
+- **Open Source**: Full control over your automation infrastructure with no vendor lock-in
+- **Familiar Technologies**: Built on widely-used technologies (Python, ASP.NET Core, Next.js)
+- **Scalable**: Designed to grow with your organization's automation needs
+- **Secure**: Robust authentication, authorization, and multi-tenant isolation
+
 ### Key Features
 
-- **User Authentication & Authorization**: JWT-based authentication with refresh tokens
-- **Multi-Tenant Architecture**: Shared database with tenant isolation
-- **Bot Agent Management**: Register and manage automation agents
-- **Automation Package Management**: Create, edit, and deploy automation packages
-- **Real-Time Monitoring**: Monitor bot agent status and activities
-- **Execution Logging**: Detailed logging of all automation executions
-- **Scheduling**: Schedule automation tasks to run at specific times
-- **Notifications**: Alerts for automation success, failures, and issues
-- **Performance Analytics**: Metrics and visualizations for automation processes
-- **Multi-Environment Support**: Development, testing, and production environments
+- User Authentication & Authorization
+- Multi-Tenant Architecture
+- Bot Agent Management
+- Automation Package Management
+- Real-Time Monitoring
+- Execution Logging
+- Scheduling
+- Notifications
+- Performance Analytics
+- Multi-Environment Support
 
-## Architecture
+## Documentation
 
-OpenAutomate follows a modern, scalable architecture with clean separation of concerns:
+This repository includes comprehensive documentation to help you understand and contribute to the project:
 
-- **Backend**: ASP.NET Core 7.0 API with clean architecture (Core, Infrastructure, API layers)
-- **Frontend**: Next.js 14 with App Router, TypeScript, and React
-- **Authentication**: JWT with refresh tokens and HTTP-only cookies
-- **Multi-Tenant**: Path-based tenant identification with global query filters
-- **Database**: Entity Framework Core with PostgreSQL
+### Technical Documentation
+
+- [Technical Design Document](./techinal/TechnicalDesignDocument.md) - Architecture, data models, and technical details
+- [Development Guide](./Development_Guide.md) - How to add new features, follow project conventions, and best practices
+- [Multi-Tenant Architecture](./techinal/MultiTenantArchitecture.md) - Details about the multi-tenant implementation
+- [Refresh Token Implementation](./techinal/RefreshTokenImplementation.md) - Authentication system details
+- [Project Task Breakdown](./techinal/ProjectTaskBreakdown.md) - Detailed development tasks
+
+### Context Documentation
+
+- [Project Brief](./context/projectbrief.md) - Project overview and core requirements
+- [Product Context](./context/productContext.md) - Problem statement and user experience goals
+- [System Patterns](./context/systemPatterns.md) - Architecture and design patterns
+- [Technical Context](./context/techContext.md) - Tech stack and implementation details
+- [Active Context](./context/activeContext.md) - Current focus and recent changes
+- [Progress](./context/progress.md) - Project status and next steps
 
 ## Getting Started
 
@@ -39,6 +58,7 @@ OpenAutomate follows a modern, scalable architecture with clean separation of co
 - Node.js 18+
 - SQL Server or PostgreSQL
 - Visual Studio 2022 or VS Code with C# extension
+- Git
 
 ### Backend Setup
 
@@ -72,72 +92,27 @@ npm install
 npm run dev
 ```
 
-### Environment Variables
+### Environment Configuration
 
-Create a `.env` file in the root directory with the following variables:
-
-```
-DATABASE_CONNECTION_STRING=connection_string
-JWT_SECRET=secret_key
-JWT_ISSUER=OpenAutomate
-JWT_AUDIENCE=OpenAutomateUsers
-JWT_ACCESS_TOKEN_EXPIRATION_MINUTES=15
-JWT_REFRESH_TOKEN_EXPIRATION_DAYS=7
-ALLOWED_ORIGINS=http://localhost:3000
-PYTHON_RUNTIME_PATH=path_to_python
-ENABLE_TENANT_ISOLATION=true
-DEFAULT_TENANT_SLUG=default
-```
+See the [Technical Context](./context/techContext.md) document for details on required environment variables and configuration settings.
 
 ## Project Structure
 
-### Backend
+The project follows a clean architecture approach with separate backend and frontend components. For detailed information about the project structure:
 
-The backend solution consists of three main projects:
+- Backend architecture details: [Technical Design Document](./techinal/TechnicalDesignDocument.md)
+- Frontend architecture details: [Development Guide](./Development_Guide.md)
 
-1. **OpenAutomate.Core**: Domain models, interfaces, and business logic
-2. **OpenAutomate.Infrastructure**: Implementations of interfaces, database context
-3. **OpenAutomate.API**: API controllers and application configuration
+## Development Workflow
 
-### Frontend
+Before starting development, we recommend reading the following documents:
 
-The frontend follows the Next.js App Router structure:
+1. First, review the [Project Brief](./context/projectbrief.md) to understand the core requirements
+2. Next, read the [Technical Design Document](./techinal/TechnicalDesignDocument.md) for architecture overview
+3. Then review the [Development Guide](./Development_Guide.md) for coding standards and patterns
+4. Check [Active Context](./context/activeContext.md) and [Progress](./context/progress.md) for current status
 
-1. **app**: Page routes and layouts
-2. **components**: Reusable React components
-3. **lib**: Utilities and services
-4. **types**: TypeScript type definitions
-
-## Development
-
-Refer to the [Development Guide](./Development_Guide.md) for detailed instructions on:
-
-- Adding new entities
-- Creating API endpoints
-- Working with multi-tenant architecture
-- Creating frontend components and pages
-- Best practices for authentication and authorization
-- Error handling patterns
-- And more
-
-## Testing
-
-### Backend Testing
-
-```bash
-# Run unit tests
-dotnet test
-```
-
-### Frontend Testing
-
-```bash
-# Run component tests
-npm test
-
-# Run end-to-end tests
-npm run cypress
-```
+For specific development tasks, refer to the [Development Guide](./Development_Guide.md) which provides detailed instructions for common development scenarios.
 
 ## Contributing
 
@@ -151,13 +126,8 @@ We welcome contributions to OpenAutomate! Please follow these steps:
 6. Push to the branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
 
-Please make sure to update tests as appropriate and adhere to the existing coding standards.
+Please make sure to update tests as appropriate and adhere to the existing coding standards described in the [Development Guide](./Development_Guide.md).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Thanks to all contributors who have helped shape this project
-- Special appreciation to the open-source community for the tools and libraries used 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
