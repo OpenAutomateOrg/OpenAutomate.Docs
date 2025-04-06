@@ -31,7 +31,7 @@ This guide provides essential information for developers working on the OpenAuto
 
 OpenAutomate is an open-source business process automation management platform built with:
 
-- **Backend**: ASP.NET Core 7.0 with clean architecture
+- **Backend**: ASP.NET Core 8.0 with clean architecture
 - **Frontend**: Next.js 14 with App Router and TypeScript
 - **Authentication**: JWT with refresh tokens (HTTP-only cookies)
 - **Multi-Tenant Architecture**: Shared database with tenant filtering
@@ -919,7 +919,7 @@ Understanding when to use Server vs. Client Components in Next.js:
 ### Setting Up the Development Environment
 
 1. **Prerequisites**:
-   - .NET SDK 7.0+
+   - .NET SDK 8.0
    - Node.js 18+
    - SQL Server or PostgreSQL
    - Visual Studio 2022 or VS Code with C# extension
