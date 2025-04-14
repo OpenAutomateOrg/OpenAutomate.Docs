@@ -6,6 +6,15 @@ OpenAutomate is an open-source business process automation management platform d
 
 The platform is built with a multi-tenant architecture, allowing multiple organization units to use the system while ensuring data isolation and security between tenants.
 
+## 1.1. Project Repositories
+
+OpenAutomate is organized into several repositories:
+
+- [OpenAutomate.Backend](https://github.com/OpenAutomateOrg/OpenAutomate.Backend) - ASP.NET Core backend API and services
+- [OpenAutomate.Frontend](https://github.com/OpenAutomateOrg/OpenAutomate.Frontend) - Next.js web application frontend
+- [OpenAutomate.Docs](https://github.com/OpenAutomateOrg/OpenAutomate.Docs) - Project documentation (this repository)
+- [OpenAutomate.BotAgent](https://github.com/OpenAutomateOrg/OpenAutomate.BotAgent) - Python-based automation agent
+
 ## 2. Requirements
 
 ### 2.1 Functional Requirements

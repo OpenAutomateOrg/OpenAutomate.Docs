@@ -2,6 +2,15 @@
 
 This guide provides essential information for developers working on the OpenAutomate project. It covers both backend and frontend development, including how to add new features, follow project conventions, and leverage existing components.
 
+## Project Repositories
+
+OpenAutomate is organized into several repositories:
+
+- [OpenAutomate.Backend](https://github.com/OpenAutomateOrg/OpenAutomate.Backend) - ASP.NET Core backend API and services
+- [OpenAutomate.Frontend](https://github.com/OpenAutomateOrg/OpenAutomate.Frontend) - Next.js web application frontend
+- [OpenAutomate.Docs](https://github.com/OpenAutomateOrg/OpenAutomate.Docs) - Project documentation (this repository)
+- [OpenAutomate.BotAgent](https://github.com/OpenAutomateOrg/OpenAutomate.BotAgent) - Python-based automation agent
+
 ## Table of Contents
 
 1. [Project Architecture Overview](#project-architecture-overview)
@@ -927,7 +936,7 @@ Understanding when to use Server vs. Client Components in Next.js:
 2. **Backend Setup**:
    ```bash
    # Clone the repository
-   git clone https://github.com/yourusername/openautomate.git
+   git clone https://github.com/OpenAutomateOrg/OpenAutomate.Backend.git
    
    # Navigate to backend directory
    cd OpenAutomate.Backend
@@ -944,14 +953,28 @@ Understanding when to use Server vs. Client Components in Next.js:
 
 3. **Frontend Setup**:
    ```bash
+   # Clone the repository
+   git clone https://github.com/OpenAutomateOrg/OpenAutomate.Frontend.git
+   
    # Navigate to frontend directory
-   cd OpenAutomate.Frontend/openautomate-frontend
+   cd OpenAutomate.Frontend
    
    # Install dependencies
    npm install
    
    # Run development server
    npm run dev
+   ```
+
+4. **Bot Agent Setup** (optional):
+   ```bash
+   # Clone the repository
+   git clone https://github.com/OpenAutomateOrg/OpenAutomate.BotAgent.git
+   
+   # Navigate to bot agent directory
+   cd OpenAutomate.BotAgent
+   
+   # Follow the setup instructions in the repository README
    ```
 
 ### Running the Application

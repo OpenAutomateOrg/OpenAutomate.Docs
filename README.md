@@ -29,6 +29,15 @@ OpenAutomate enables organizations to create, deploy, monitor, and manage automa
 - Performance Analytics
 - Multi-Environment Support
 
+## Project Repositories
+
+OpenAutomate is organized into several repositories:
+
+- [OpenAutomate.Backend](https://github.com/OpenAutomateOrg/OpenAutomate.Backend) - ASP.NET Core backend API and services
+- [OpenAutomate.Frontend](https://github.com/OpenAutomateOrg/OpenAutomate.Frontend) - Next.js web application frontend
+- [OpenAutomate.Docs](https://github.com/OpenAutomateOrg/OpenAutomate.Docs) - Project documentation (this repository)
+- [OpenAutomate.BotAgent](https://github.com/OpenAutomateOrg/OpenAutomate.BotAgent) - Python-based automation agent
+
 ## Documentation
 
 This repository includes comprehensive documentation to help you understand and contribute to the project:
@@ -64,7 +73,7 @@ This repository includes comprehensive documentation to help you understand and 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/openautomate.git
+git clone https://github.com/OpenAutomateOrg/OpenAutomate.Backend.git
 
 # Navigate to backend directory
 cd OpenAutomate.Backend
@@ -82,14 +91,29 @@ dotnet run --project OpenAutomate.API
 ### Frontend Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/OpenAutomateOrg/OpenAutomate.Frontend.git
+
 # Navigate to frontend directory
-cd OpenAutomate.Frontend/openautomate-frontend
+cd OpenAutomate.Frontend
 
 # Install dependencies
 npm install
 
 # Run development server
 npm run dev
+```
+
+### Bot Agent Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/OpenAutomateOrg/OpenAutomate.BotAgent.git
+
+# Navigate to bot agent directory
+cd OpenAutomate.BotAgent
+
+# Follow the setup instructions in the repository README
 ```
 
 ### Environment Configuration
