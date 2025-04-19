@@ -4,20 +4,20 @@
 
 ### 1.1 Project Information
 - **Project name:** OpenAutomate - Multi-Tenant Business Process Automation Management Platform
-- **Project code:** OABPAMP
-- **Group name:** Capstone-Group-5
+- **Project code:** BPAMP
+- **Group name:** DXTeam
 - **Software type:** Web Application, Desktop Application (Bot Agent)
 
 ### 1.2 Project Team
 
 | Full Name | Role | Email | Mobile |
 |-----------|------|-------|--------|
-| Academic Advisor | Lecturer | advisor@university.edu | - |
-| Hoai | Backend Lead / Team Leader | hoai@example.com | - |
-| Nhat | Frontend Lead | nhat@example.com | - |
-| Chinh | DevOps Specialist | chinh@example.com | - |
-| Hung | QA Lead | hung@example.com | - |
-| Vu | Bot Agent Lead | vu@example.com | - |
+| Nguyen Xuan Long | Lecturer | LongNX6@fe.edu.vn | 0905764750 |
+| Nguyen Xuan Hoai | Leader | hoainxde140218@fpt.edu.vn | 0702302133 |
+| Phan Hoang Nhat | Member | nhatphde170078@fpt.edu.vn | 0896515973 |
+| Huynh Duc Chinh | Member | chinhhdde160540@fpt.edu.vn | 0917046092 |
+| Nguyen Luong Hoang Vu | Member | vunlhde160548@fpt.edu.vn | 0905833884 |
+| Tran Van Khanh Hung | Member | hungtvkde160432@fpt.edu.vn | 0369909524 |
 
 ## 2. Product Background
 
