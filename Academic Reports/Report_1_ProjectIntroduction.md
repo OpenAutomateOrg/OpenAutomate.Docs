@@ -3,7 +3,7 @@
 ## 1. Overview
 
 ### 1.1 Project Information
-- **Project name:** OpenAutomate - Multi-Tenant Business Process Automation Management Platform
+- **Project name:** OpenAutomate - Business Process Automation Management & Orchestration Platform using ASP.NET Core API, Worker, Next.js, Python
 - **Project code:** BPAMP
 - **Group name:** DXTeam
 - **Software type:** Web Application, Desktop Application (Bot Agent)
