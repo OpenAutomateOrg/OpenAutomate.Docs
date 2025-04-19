@@ -229,7 +229,7 @@ D~Do; R~Review; S~Support; I~Informed; <blank>- Omitted
 
 | Category | Tools / Infrastructure |
 |----------|------------------------|
-| Technology | ASP.NET Core 8 (Backend), Next.js (Frontend), Python (Bot Agent) |
+| Technology | ASP.NET Core 8 (Backend), Next.js (Frontend), .NET Worker Service / WPF (Bot Agent), Python (Automation Scripts) |
 | Database | SQL Server, Entity Framework Core |
 | IDEs/Editors | Visual Studio 2022, Visual Studio Code, JetBrains Rider |
 | Diagramming | Draw.io, Mermaid, Lucidchart |
