@@ -21,7 +21,7 @@ OpenAutomate is organized into several repositories:
 
 * Users must be able to register and authenticate with the system using credentials or JWT tokens
 * Administrators must be able to manage users and assign role-based permissions
-* Users must be able to register and manage bot agents across an organization unit
+* Users must be able to connect and manage bot agents across an organization unit
 * Users must be able to create, edit, and deploy automation packages to bot agents
 * System must provide real-time monitoring of bot agent status and activities
 * System must log all automation executions with detailed information
@@ -88,6 +88,77 @@ sequenceDiagram
     API-->>User: Response
 ```
 
+#### 3.1.2 Entity Framework Core Global Query Filters
+
+The multi-tenant isolation is implemented using Entity Framework Core's global query filters to enforce tenant-specific data access:
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+    
+    // Apply tenant filters to all tenant-specific entities
+    modelBuilder.Entity<BotAgent>().HasQueryFilter(
+        e => _tenantContextAccessor.TenantContext.IgnoreTenantFilter || 
+             e.OrganizationUnitId == _tenantContextAccessor.TenantContext.CurrentTenantId);
+             
+    modelBuilder.Entity<AutomationPackage>().HasQueryFilter(
+        e => _tenantContextAccessor.TenantContext.IgnoreTenantFilter || 
+             e.OrganizationUnitId == _tenantContextAccessor.TenantContext.CurrentTenantId);
+    
+    // Apply similar filters to all tenant-specific entities
+    // ...
+}
+```
+
+This implementation ensures:
+1. All queries on tenant-specific entities automatically filter by the current tenant ID
+2. The tenant context can be bypassed with `IgnoreTenantFilter()` for admin or cross-tenant operations
+3. Data isolation is enforced at the database level, reducing the risk of data leaks
+4. New tenant-specific entities automatically inherit the same isolation pattern
+
+#### 3.1.3 Tenant Resolution
+
+The tenant is identified at the start of each request through the URL path:
+
+```csharp
+// TenantResolutionMiddleware
+public async Task InvokeAsync(HttpContext context, IUnitOfWork unitOfWork, ITenantContext tenantContext)
+{
+    var path = context.Request.Path.Value;
+    var pathSegments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    
+    if (pathSegments.Length > 0)
+    {
+        var tenantSlug = pathSegments[0];
+        var organizationUnit = await unitOfWork.OrganizationUnits
+            .GetFirstOrDefaultAsync(ou => ou.Slug == tenantSlug);
+            
+        if (organizationUnit != null)
+        {
+            tenantContext.SetCurrentTenant(organizationUnit.Id, organizationUnit.Slug);
+            // Important: We preserve the tenant slug in the URL
+            // The path remains unchanged, preserving the {tenant-slug} in the URL
+            await _next(context);
+            return;
+        }
+        else
+        {
+            context.Response.StatusCode = 404;
+            await context.Response.WriteAsJsonAsync(new { error = "Tenant not found" });
+            return;
+        }
+    }
+    
+    await _next(context);
+}
+```
+
+The implementation preserves the tenant slug in the URL path rather than rewriting it. This approach:
+1. Maintains explicit tenant context in URLs for better debugging
+2. Ensures consistency with controller routes that expect the tenant parameter
+3. Simplifies route generation in `CreatedAtAction` and similar methods
+
 ### 3.2. Data Model
 
 The database schema includes the following core entities:
@@ -99,6 +170,7 @@ erDiagram
     OrganizationUnit ||--o{ AutomationPackage : owns
     OrganizationUnit ||--o{ Execution : tracks
     OrganizationUnit ||--o{ Schedule : manages
+    OrganizationUnit ||--o{ Asset : owns
     User ||--o{ BotAgent : manages
     User ||--o{ AutomationPackage : creates
     User ||--o{ Schedule : creates
@@ -106,6 +178,8 @@ erDiagram
     BotAgent ||--o{ Execution : performs
     AutomationPackage ||--o{ Execution : used_in
     Schedule ||--o{ Execution : triggers
+    Asset ||--o{ AssetBotAgent : associated_with
+    BotAgent ||--o{ AssetBotAgent : associated_with
     
     OrganizationUnit {
         Guid Id
@@ -132,6 +206,7 @@ erDiagram
         string MachineName
         string IpAddress
         string Status
+        string MachineKey
         Guid OwnerId
         Guid OrganizationUnitId
         DateTime RegisteredAt
@@ -180,6 +255,26 @@ erDiagram
         Guid CreatedById
         DateTime CreatedAt
     }
+    
+    Asset {
+        Guid Id
+        string Name
+        string Description
+        string Type
+        string Properties
+        Guid OrganizationUnitId
+        DateTime CreatedAt
+        DateTime UpdatedAt
+    }
+    
+    AssetBotAgent {
+        Guid Id
+        Guid AssetId
+        Guid BotAgentId
+        Guid OrganizationUnitId
+        string AccessLevel
+        DateTime AssignedAt
+    }
 ```
 
 ### 3.3. API Changes
@@ -210,7 +305,7 @@ The API will follow a RESTful design with tenant-specific routing:
 - `DELETE /{tenant-slug}/api/users/{id}` - Delete a user (tenant admin)
 
 **Bot Agents:**
-- `POST /{tenant-slug}/api/agents/register` - Register a new bot agent in tenant
+- `POST /{tenant-slug}/api/agents/connect` - Connect a new bot agent to tenant
 - `GET /{tenant-slug}/api/agents` - List all bot agents in tenant
 - `GET /{tenant-slug}/api/agents/{id}` - Get bot agent details
 - `PUT /{tenant-slug}/api/agents/{id}` - Update bot agent details
@@ -240,7 +335,7 @@ The API will follow a RESTful design with tenant-specific routing:
 
 Example Request/Response:
 ```json
-// POST /{tenant-slug}/api/agents/register
+// POST /{tenant-slug}/api/agents/connect
 // Request
 {
   "name": "Finance-Bot-01",
@@ -268,7 +363,7 @@ The frontend will be developed using Next.js with tenant-specific routing and th
 
 - **Tenant Selection**: For users with access to multiple organization units
 - **Dashboard**: Overview of system status, recent executions, and key metrics
-- **Bot Agents**: List and management of registered bot agents
+- **Bot Agents**: List and management of connected bot agents
 - **Automation Packages**: Repository of automation packages with version management
 - **Executions**: Monitoring and logging of automation executions
 - **Schedules**: Configuration of automation schedules
@@ -550,6 +645,98 @@ export default function LoginPage() {
 - WebSocket connection pooling for real-time updates
 - Efficient package storage and distribution
 - Monitoring performance impact of tenant filtering
+
+### 3.7. Real-time Communication
+
+The OpenAutomate platform implements real-time communication between bot agents and the API server using SignalR, a library for adding real-time web functionality to applications.
+
+#### 3.7.1 Bot Agent to Server Communication
+
+Communication between bot agents and the server follows a direct connection model:
+
+```mermaid
+sequenceDiagram
+    participant BotAgent
+    participant SignalRHub
+    participant API
+    participant Database
+    
+    BotAgent->>API: Register bot agent via REST API
+    API-->>BotAgent: Return registration success with connection details
+    BotAgent->>SignalRHub: Establish persistent WebSocket connection
+    SignalRHub->>API: Authenticate connection with machine key
+    
+    loop Status Updates
+        BotAgent->>SignalRHub: Send status heartbeat
+        SignalRHub->>Database: Update bot agent status
+    end
+    
+    API->>SignalRHub: Issue command to bot agent
+    SignalRHub->>BotAgent: Deliver command
+    BotAgent->>SignalRHub: Send command execution updates
+    SignalRHub->>Database: Log execution progress
+```
+
+#### 3.7.2 Tenant-Aware SignalR Connections
+
+SignalR connections maintain tenant context:
+
+```csharp
+public class BotAgentHub : Hub
+{
+    private readonly ITenantContext _tenantContext;
+    private readonly IUnitOfWork _unitOfWork;
+    
+    public BotAgentHub(ITenantContext tenantContext, IUnitOfWork unitOfWork)
+    {
+        _tenantContext = tenantContext;
+        _unitOfWork = unitOfWork;
+    }
+    
+    public override async Task OnConnectedAsync()
+    {
+        // Extract and validate machine key from connection
+        var machineKey = Context.GetHttpContext().Request.Query["machineKey"];
+        
+        // Find bot agent by machine key
+        var botAgent = await _unitOfWork.BotAgents
+            .GetFirstOrDefaultAsync(ba => ba.MachineKey == machineKey);
+            
+        if (botAgent != null)
+        {
+            // Set tenant context for this connection
+            _tenantContext.SetCurrentTenant(botAgent.OrganizationUnitId);
+            
+            // Add to bot-specific group for targeted messages
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"bot-{botAgent.Id}");
+            
+            // Update bot agent status
+            botAgent.Status = "Online";
+            botAgent.LastHeartbeat = DateTime.UtcNow;
+            await _unitOfWork.CompleteAsync();
+        }
+        else
+        {
+            Context.Abort();
+        }
+        
+        await base.OnConnectedAsync();
+    }
+    
+    // Additional hub methods for bot agent communication
+    // ...
+}
+```
+
+#### 3.7.3 Security Considerations
+
+The real-time communication implementation includes the following security measures:
+
+1. **Authentication**: Bot agents authenticate using a secure machine key generated as a UUID/GUID
+2. **Tenant Isolation**: Each connection is tied to its specific tenant context
+3. **Authorization**: Bot agents can only receive commands intended for them
+4. **Connection Validation**: Invalid connections are immediately terminated
+5. **Heartbeat Monitoring**: Bot agent connections are monitored for activity
 
 ## 4. Testing Plan
 

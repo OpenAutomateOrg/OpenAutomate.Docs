@@ -44,11 +44,11 @@ This repository includes comprehensive documentation to help you understand and 
 
 ### Technical Documentation
 
-- [Technical Design Document](./techinal/TechnicalDesignDocument.md) - Architecture, data models, and technical details
+- [Technical Design Document](./technical/TechnicalDesignDocument.md) - Architecture, data models, and technical details
 - [Development Guide](./Development_Guide.md) - How to add new features, follow project conventions, and best practices
-- [Multi-Tenant Architecture](./techinal/MultiTenantArchitecture.md) - Details about the multi-tenant implementation
-- [Refresh Token Implementation](./techinal/RefreshTokenImplementation.md) - Authentication system details
-- [Project Task Breakdown](./techinal/ProjectTaskBreakdown.md) - Detailed development tasks
+- [Multi-Tenant Architecture](./technical/MultiTenantArchitecture.md) - Details about the multi-tenant implementation
+- [Refresh Token Implementation](./technical/RefreshTokenImplementation.md) - Authentication system details
+- [Project Task Breakdown](./technical/ProjectTaskBreakdown.md) - Detailed development tasks
 
 ### Context Documentation
 

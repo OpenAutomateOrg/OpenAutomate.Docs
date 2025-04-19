@@ -86,43 +86,14 @@ public static class Resources
 }
 ```
 
-## Implementation Details
-
-### 1. Declaring Protected Endpoints
-
-Controllers and actions are protected using the `RequirePermission` attribute:
-
-```csharp
-[HttpGet("user/{userId}")]
-[RequirePermission(Resources.AdminResource, Permissions.View)]
-public async Task<IActionResult> GetUserAuthorities(Guid userId)
-{
-    // Implementation
-}
-```
-
-### 2. Permission Check Process
-
-When a request is made to a protected endpoint:
-
-1. The `RequirePermissionAttribute` extracts the user ID from claims
-2. It calls `IAuthorizationManager.HasPermissionAsync()` with:
-   - User ID
-   - Resource name
-   - Required permission level
-3. The check is delegated to `AuthorityResourceRepository.HasPermissionAsync()` which:
-   - Retrieves all authorities assigned to the user
-   - Checks if any authority has the required permission for the resource
-   - Returns true if permission exists, false otherwise
-
-### 3. Multi-Tenant Support
+## Multi-Tenant Support
 
 The RBAC system is integrated with multi-tenant architecture:
 
-1. `Authority` entities are tenant-agnostic (shared across tenants)
-2. `UserAuthority` and `AuthorityResource` entities are tenant-specific
-3. Each tenant can define its own role assignments and permissions
-4. Organization units provide tenant isolation
+1. All RBAC entities (`Authority`, `UserAuthority`, and `AuthorityResource`) are tenant-specific
+2. Each authority belongs to a specific organization unit (tenant) 
+3. Each tenant can define its own authorities, role assignments, and permissions
+4. Organization units provide tenant isolation for all RBAC components
 
 ## Key Code Components
 
@@ -180,20 +151,44 @@ The `AuthorizationManager` is the central service that coordinates permission ch
 ```csharp
 public class AuthorizationManager : IAuthorizationManager
 {
-    private readonly IAuthorityRepository _authorityRepository;
-    private readonly IAuthorityResourceRepository _authorityResourceRepository;
-    private readonly IUserAuthorityRepository _userAuthorityRepository;
+    private readonly IUnitOfWork _unitOfWork;
     
     // Constructor with dependency injection
+    public AuthorizationManager(IUnitOfWork unitOfWork)
+    {
+        _unitOfWork = unitOfWork;
+    }
     
     public async Task<bool> HasPermissionAsync(Guid userId, string resourceName, int permission)
     {
-        return await _authorityResourceRepository.HasPermissionAsync(userId, resourceName, permission);
+        // Get user's authorities
+        var userAuthorities = await GetUserAuthoritiesWithDetailAsync(userId);
+        if (!userAuthorities.Any())
+            return false;
+            
+        var authorityIds = userAuthorities.Select(ua => ua.Id);
+        
+        // Check if any of user's authorities has the required permission for the resource
+        var hasPermission = await _unitOfWork.AuthorityResources.GetAllAsync(
+            ar => authorityIds.Contains(ar.AuthorityId) && 
+                  ar.ResourceName == resourceName && 
+                  ar.Permission >= permission);
+                  
+        return hasPermission.Any();
     }
     
     // Additional methods for authority management
 }
 ```
+
+## Implementation Pattern
+
+The RBAC system follows the UnitOfWork pattern used throughout the application:
+
+1. Authority-related entities are accessed through the standard `IRepository<T>` interface
+2. All repositories are accessed via the `IUnitOfWork` interface
+3. No specialized repository implementations are needed, following the same pattern as other entities in the system
+4. This ensures consistency with the application's architecture and proper transaction management
 
 ## Common Usage Patterns
 

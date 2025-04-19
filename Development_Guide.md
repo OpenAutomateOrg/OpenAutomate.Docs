@@ -216,6 +216,87 @@ Follow these steps to add a new entity:
    builder.Services.AddScoped<IMyEntityService, MyEntityService>();
    ```
 
+### Implementing Multi-Tenant Entities
+
+When creating entities that belong to a specific tenant (organization unit), follow these steps:
+
+1. **Use the TenantEntity Base Class**:
+   ```csharp
+   public class MyTenantEntity : TenantEntity
+   {
+       public string Name { get; set; }
+       public string Description { get; set; }
+       
+       // Add entity-specific properties
+       public bool IsActive { get; set; }
+       
+       // Add relationships (if needed)
+       public Guid? RelatedEntityId { get; set; }
+       public virtual RelatedEntity RelatedEntity { get; set; }
+   }
+   ```
+
+2. **Alternative Approach Using ITenantEntity**:
+   If you need to inherit from another base class, implement the ITenantEntity interface:
+   ```csharp
+   public class MySpecialEntity : BaseEntity, ITenantEntity
+   {
+       // ITenantEntity implementation
+       public Guid OrganizationUnitId { get; set; }
+       public virtual OrganizationUnit OrganizationUnit { get; set; }
+       
+       // Entity-specific properties
+       public string Name { get; set; }
+   }
+   ```
+
+3. **Configure Entity in ApplicationDbContext**:
+   ```csharp
+   protected override void OnModelCreating(ModelBuilder modelBuilder)
+   {
+       // Existing code...
+       
+       // Configure tenant entity
+       modelBuilder.Entity<MyTenantEntity>()
+           .HasOne(e => e.OrganizationUnit)
+           .WithMany()
+           .HasForeignKey(e => e.OrganizationUnitId)
+           .OnDelete(DeleteBehavior.Restrict);
+           
+       // If using global query filters for tenant isolation:
+       modelBuilder.Entity<MyTenantEntity>().HasQueryFilter(
+           e => tenantContextAccessor.TenantContext.IgnoreTenantFilter || 
+                e.OrganizationUnitId == tenantContextAccessor.TenantContext.CurrentTenantId);
+   }
+   ```
+
+4. **Register in IUnitOfWork**:
+   ```csharp
+   public interface IUnitOfWork : IDisposable
+   {
+       // Existing repositories...
+       
+       IRepository<MyTenantEntity> MyTenantEntities { get; }
+       
+       Task<int> CompleteAsync();
+   }
+   ```
+
+5. **Add Property in UnitOfWork Implementation**:
+   ```csharp
+   public class UnitOfWork : IUnitOfWork
+   {
+       // Existing code...
+       
+       private IRepository<MyTenantEntity> _myTenantEntityRepository;
+       
+       public IRepository<MyTenantEntity> MyTenantEntities => 
+           _myTenantEntityRepository ??= new Repository<MyTenantEntity>(_context);
+   }
+   ```
+
+By following these patterns, you ensure your entity participates in the multi-tenant architecture and works with the global query filters for automatic tenant data isolation.
+
 ### Creating API Endpoints
 
 Follow these steps to add a new controller:
@@ -360,6 +441,209 @@ The OpenAutomate backend uses JWT with refresh tokens for authentication:
    - Backend checks and validates tokens automatically
    - Use the EF Core query optimization technique described in the documentation
 
+### JWT Authentication Implementation
+
+OpenAutomate implements a comprehensive JWT authentication system with refresh tokens. Here's a detailed explanation of how it works:
+
+1. **JWT Token Structure**:
+   ```csharp
+   // Token generation in TokenService
+   var claims = new[]
+   {
+       new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+       new Claim(JwtRegisteredClaimNames.Email, user.Email),
+       new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+       new Claim("tenant", tenantId.ToString())  // Include tenant context in token
+   };
+   
+   var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
+   var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+   
+   var token = new JwtSecurityToken(
+       issuer: _configuration["JWT:ValidIssuer"],
+       audience: _configuration["JWT:ValidAudience"],
+       claims: claims,
+       expires: DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JWT:TokenValidityInMinutes"])),
+       signingCredentials: creds
+   );
+   ```
+
+2. **Refresh Token Implementation**:
+   ```csharp
+   // RefreshToken entity
+   public class RefreshToken : BaseEntity
+   {
+       public string Token { get; set; }
+       public DateTime Expires { get; set; }
+       public bool IsExpired => DateTime.UtcNow >= Expires;
+       public DateTime Created { get; set; }
+       public DateTime? Revoked { get; set; }
+       public bool IsRevoked => Revoked != null;
+       public bool IsActive => !IsRevoked && !IsExpired;
+       public string? ReplacedByToken { get; set; }
+       public Guid UserId { get; set; }
+       public virtual User User { get; set; }
+   }
+   ```
+
+3. **Token Service Interface**:
+   ```csharp
+   public interface ITokenService
+   {
+       string GenerateAccessToken(User user, Guid? tenantId = null);
+       RefreshToken GenerateRefreshToken(string ipAddress);
+       Task<AuthResponse> RefreshTokenAsync(string token, string ipAddress);
+       Task<bool> RevokeTokenAsync(string token, string ipAddress);
+       ClaimsPrincipal GetPrincipalFromExpiredToken(string token);
+   }
+   ```
+
+4. **JWT Authentication Configuration**:
+   ```csharp
+   // In Program.cs
+   builder.Services.AddAuthentication(options =>
+   {
+       options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+       options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+   }).AddJwtBearer(options =>
+   {
+       options.SaveToken = true;
+       options.RequireHttpsMetadata = false;
+       options.TokenValidationParameters = new TokenValidationParameters
+       {
+           ValidateIssuer = true,
+           ValidateAudience = true,
+           ValidateLifetime = true,
+           ValidateIssuerSigningKey = true,
+           ClockSkew = TimeSpan.Zero,
+           ValidIssuer = builder.Configuration["JWT:ValidIssuer"],
+           ValidAudience = builder.Configuration["JWT:ValidAudience"],
+           IssuerSigningKey = new SymmetricSecurityKey(
+               Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"]))
+       };
+   });
+   ```
+
+5. **Login Workflow**:
+   ```csharp
+   [HttpPost("login")]
+   public async Task<IActionResult> Login([FromBody] LoginRequest model)
+   {
+       // Validate user credentials
+       var user = await _unitOfWork.Users.GetFirstOrDefaultAsync(u => u.Email == model.Email);
+       if (user == null || !VerifyPassword(model.Password, user.PasswordHash, user.PasswordSalt))
+           return Unauthorized(new { message = "Invalid email or password" });
+       
+       // Check if user has access to the tenant
+       var tenantId = _tenantContext.CurrentTenantId;
+       if (tenantId.HasValue)
+       {
+           var hasAccess = await _unitOfWork.OrganizationUnitUsers.AnyAsync(
+               ou => ou.UserId == user.Id && ou.OrganizationUnitId == tenantId.Value);
+           
+           if (!hasAccess)
+               return Unauthorized(new { message = "User does not have access to this tenant" });
+       }
+       
+       // Generate tokens
+       var accessToken = _tokenService.GenerateAccessToken(user, tenantId);
+       var refreshToken = _tokenService.GenerateRefreshToken(GetIpAddress());
+       
+       // Save refresh token
+       user.RefreshTokens ??= new List<RefreshToken>();
+       user.RefreshTokens.Add(refreshToken);
+       _unitOfWork.Users.Update(user);
+       await _unitOfWork.CompleteAsync();
+       
+       // Set refresh token cookie
+       SetRefreshTokenCookie(refreshToken.Token);
+       
+       return Ok(new AuthResponse
+       {
+           AccessToken = accessToken,
+           RefreshToken = refreshToken.Token,
+           ExpiresIn = int.Parse(_configuration["JWT:TokenValidityInMinutes"]) * 60
+       });
+   }
+   ```
+
+6. **Refresh Token Endpoint**:
+   ```csharp
+   [HttpPost("refresh-token")]
+   public async Task<IActionResult> RefreshToken()
+   {
+       var refreshToken = Request.Cookies["refreshToken"];
+       
+       if (string.IsNullOrEmpty(refreshToken))
+           return BadRequest(new { message = "Refresh token is required" });
+       
+       var response = await _tokenService.RefreshTokenAsync(refreshToken, GetIpAddress());
+       
+       if (response == null)
+           return Unauthorized(new { message = "Invalid token" });
+       
+       SetRefreshTokenCookie(response.RefreshToken);
+       
+       return Ok(response);
+   }
+   ```
+
+7. **JWT Authentication Middleware**:
+   ```csharp
+   public class JwtAuthenticationMiddleware
+   {
+       private readonly RequestDelegate _next;
+       
+       public JwtAuthenticationMiddleware(RequestDelegate next)
+       {
+           _next = next;
+       }
+       
+       public async Task InvokeAsync(HttpContext context, IUnitOfWork unitOfWork, 
+           ITokenService tokenService, ITenantContext tenantContext)
+       {
+           // Extract token from Authorization header
+           var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+           
+           if (!string.IsNullOrEmpty(token))
+           {
+               try
+               {
+                   // Validate token and set user context
+                   var principal = tokenService.GetPrincipalFromExpiredToken(token);
+                   var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                   
+                   if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var userIdGuid))
+                   {
+                       // Set authenticated user context
+                       context.User = principal;
+                       
+                       // Optionally check if token has a tenant claim and set tenant context
+                       var tenantClaim = principal.FindFirst("tenant")?.Value;
+                       if (!string.IsNullOrEmpty(tenantClaim) && Guid.TryParse(tenantClaim, out var tenantId))
+                       {
+                           // Set tenant context only if it matches the URL tenant
+                           var urlTenantId = tenantContext.CurrentTenantId;
+                           if (!urlTenantId.HasValue || urlTenantId.Value == tenantId)
+                           {
+                               tenantContext.SetCurrentTenant(tenantId);
+                           }
+                       }
+                   }
+               }
+               catch
+               {
+                   // Token validation error - continue without setting user context
+               }
+           }
+           
+           await _next(context);
+       }
+   }
+   ```
+
+By implementing this comprehensive authentication system, OpenAutomate ensures secure access to tenant-specific resources and maintains proper tenant isolation.
+
 ### Error Handling
 
 Follow these guidelines for error handling:
@@ -405,6 +689,114 @@ Follow these guidelines for error handling:
    }
    ```
 
+### Tenant Resolution Middleware
+
+OpenAutomate uses a dedicated middleware component to handle tenant resolution in the multi-tenant architecture. Understanding how this works is essential for developing tenant-aware features:
+
+1. **Middleware Registration**:
+   The TenantResolutionMiddleware is registered in the application pipeline:
+   ```csharp
+   app.UseMiddleware<TenantResolutionMiddleware>();
+   ```
+
+2. **Tenant Resolution Process**:
+   ```csharp
+   public class TenantResolutionMiddleware
+   {
+       private readonly RequestDelegate _next;
+       
+       public TenantResolutionMiddleware(RequestDelegate next)
+       {
+           _next = next;
+       }
+       
+       public async Task InvokeAsync(HttpContext context, IUnitOfWork unitOfWork, ITenantContext tenantContext)
+       {
+           // Extract tenant slug from the route
+           var tenantSlug = context.Request.RouteValues["tenant"]?.ToString();
+           
+           if (!string.IsNullOrEmpty(tenantSlug))
+           {
+               // Look up the tenant by slug
+               var organizationUnit = await unitOfWork.OrganizationUnits
+                   .GetFirstOrDefaultAsync(ou => ou.Slug == tenantSlug);
+                   
+               if (organizationUnit != null)
+               {
+                   // Set the current tenant context
+                   tenantContext.SetCurrentTenant(organizationUnit.Id);
+               }
+               else
+               {
+                   // Handle tenant not found
+                   context.Response.StatusCode = 404;
+                   await context.Response.WriteAsJsonAsync(new { error = "Tenant not found" });
+                   return;
+               }
+           }
+           
+           // Continue processing the request
+           await _next(context);
+       }
+   }
+   ```
+
+3. **Tenant Context Usage**:
+   The ITenantContext interface provides access to the current tenant:
+   ```csharp
+   public interface ITenantContext
+   {
+       Guid? CurrentTenantId { get; }
+       bool IgnoreTenantFilter { get; }
+       void SetCurrentTenant(Guid tenantId);
+       IDisposable IgnoreTenantFilter();
+   }
+   ```
+
+4. **Using Tenant Context in Services**:
+   ```csharp
+   public class MyService
+   {
+       private readonly ITenantContext _tenantContext;
+       private readonly IUnitOfWork _unitOfWork;
+       
+       public MyService(ITenantContext tenantContext, IUnitOfWork unitOfWork)
+       {
+           _tenantContext = tenantContext;
+           _unitOfWork = unitOfWork;
+       }
+       
+       public async Task<IEnumerable<MyEntity>> GetEntitiesForCurrentTenant()
+       {
+           // The tenant filter is automatically applied
+           return await _unitOfWork.MyEntities.GetAllAsync();
+       }
+       
+       public async Task<IEnumerable<MyEntity>> GetEntitiesAcrossTenants()
+       {
+           // Temporarily disable tenant filtering
+           using (_tenantContext.IgnoreTenantFilter())
+           {
+               return await _unitOfWork.MyEntities.GetAllAsync();
+           }
+       }
+   }
+   ```
+
+5. **URL Structure for Tenant-Specific Routes**:
+   The standard URL pattern for tenant-specific routes is:
+   ```
+   /{tenant-slug}/api/controller
+   ```
+   
+   Example:
+   ```
+   /finance/api/botAgents
+   /hr/api/assets
+   ```
+
+Understanding this middleware is crucial for developing features that respect tenant boundaries and for implementing tenant-aware business logic.
+
 ### EF Core Best Practices
 
 When working with Entity Framework Core:
@@ -446,6 +838,101 @@ When working with Entity Framework Core:
    // Save changes
    await _unitOfWork.CompleteAsync();
    ```
+
+### Repository Pattern Implementation Details
+
+The OpenAutomate platform implements the Repository Pattern with a generic `IRepository<TEntity>` interface and a Unit of Work pattern. Here's how to effectively use these patterns:
+
+1. **IRepository<TEntity> Interface**:
+   The interface provides methods for common database operations:
+   ```csharp
+   public interface IRepository<TEntity> where TEntity : class
+   {
+       Task<TEntity> GetByIdAsync(Guid id);
+       Task<TEntity> GetFirstOrDefaultAsync(Expression<Func<TEntity, bool>> filter = null,
+           params Expression<Func<TEntity, object>>[] includes);
+       Task<IEnumerable<TEntity>> GetAllAsync(Expression<Func<TEntity, bool>> filter = null,
+           Func<IQueryable<TEntity>, IOrderedQueryable<TEntity>> orderBy = null,
+           params Expression<Func<TEntity, object>>[] includes);
+       Task<bool> AnyAsync(Expression<Func<TEntity, bool>> filter = null);
+       Task AddAsync(TEntity entity);
+       Task AddRangeAsync(IEnumerable<TEntity> entities);
+       void Remove(TEntity entity);
+       void RemoveRange(IEnumerable<TEntity> entities);
+       void Update(TEntity entity);
+       // ... other methods
+   }
+   ```
+
+2. **Querying with LINQ Expressions**:
+   ```csharp
+   // Get by ID
+   var entity = await _unitOfWork.MyEntities.GetByIdAsync(id);
+   
+   // Get first entity matching a condition
+   var user = await _unitOfWork.Users.GetFirstOrDefaultAsync(
+       u => u.Email == email);
+   
+   // Get all entities matching a condition with included related data
+   var botAgents = await _unitOfWork.BotAgents.GetAllAsync(
+       filter: b => b.Status == "Active" && b.IsActive == true,
+       orderBy: q => q.OrderByDescending(b => b.LastConnected),
+       includes: b => b.Owner, b => b.AssetBotAgents);
+   
+   // Check if any entity matches a condition
+   bool exists = await _unitOfWork.Users.AnyAsync(u => u.Email == email);
+   ```
+
+3. **Saving Changes**:
+   All changes made through repositories are tracked by Entity Framework Core but are not persisted until you call `CompleteAsync()` on the Unit of Work:
+   ```csharp
+   // Add a new entity
+   await _unitOfWork.BotAgents.AddAsync(botAgent);
+   
+   // Make changes to another entity
+   user.LastLoginAt = DateTime.UtcNow;
+   _unitOfWork.Users.Update(user);
+   
+   // Both operations are part of the same transaction
+   // and will only be saved when calling CompleteAsync
+   await _unitOfWork.CompleteAsync();
+   ```
+
+4. **Tenant Awareness**:
+   When working with tenant-specific entities, the tenant context is automatically applied through global query filters:
+   ```csharp
+   // This query will automatically filter by the current tenant
+   var assets = await _unitOfWork.Assets.GetAllAsync();
+   
+   // For cross-tenant operations (admin only), use the TenantContext
+   using (_tenantContext.IgnoreTenantFilter())
+   {
+       var allAssets = await _unitOfWork.Assets.GetAllAsync();
+   }
+   ```
+
+5. **Common Repository Patterns**:
+   ```csharp
+   // Pagination
+   var pageSize = 10;
+   var pageNumber = 1;
+   var query = _unitOfWork.BotAgents.GetAllAsync(
+       filter: null,
+       orderBy: q => q.OrderBy(b => b.Name))
+       .Skip((pageNumber - 1) * pageSize)
+       .Take(pageSize);
+   
+   // Eager loading related data
+   var package = await _unitOfWork.AutomationPackages.GetFirstOrDefaultAsync(
+       p => p.Id == packageId,
+       includes: p => p.PackageVersions);
+   
+   // Filtering with multiple conditions
+   var executions = await _unitOfWork.Executions.GetAllAsync(
+       e => e.Status == "Completed" && e.CompletedAt >= DateTime.UtcNow.AddDays(-7));
+   ```
+
+These patterns ensure consistent data access throughout the application while maintaining tenant isolation and proper transaction management.
 
 ## Frontend Development
 
@@ -1008,3 +1495,74 @@ Understanding when to use Server vs. Client Components in Next.js:
 6. Request a code review
 7. Address any review comments
 8. Merge the pull request once approved 
+
+### API Documentation
+
+The OpenAutomate API uses Swagger/OpenAPI for documentation. To ensure comprehensive API documentation:
+
+1. **Enable XML Documentation**:
+   The project is configured to generate XML documentation. Ensure your controller actions and DTOs have proper XML comments:
+   ```csharp
+   /// <summary>
+   /// Creates a new bot agent for the specified tenant
+   /// </summary>
+   /// <param name="tenant">The tenant slug</param>
+   /// <param name="request">The bot agent creation request</param>
+   /// <returns>A newly created bot agent</returns>
+   /// <response code="201">Returns the newly created bot agent</response>
+   /// <response code="400">If the request is invalid</response>
+   /// <response code="404">If the tenant is not found</response>
+   [HttpPost]
+   [ProducesResponseType(typeof(BotAgentResponse), StatusCodes.Status201Created)]
+   [ProducesResponseType(StatusCodes.Status400BadRequest)]
+   [ProducesResponseType(StatusCodes.Status404NotFound)]
+   public async Task<IActionResult> CreateBotAgent([FromRoute] string tenant, [FromBody] CreateBotAgentRequest request)
+   {
+       // Implementation
+   }
+   ```
+
+2. **Document Request and Response Models**:
+   ```csharp
+   /// <summary>
+   /// Request model for creating a new bot agent
+   /// </summary>
+   public class CreateBotAgentRequest
+   {
+       /// <summary>
+       /// The display name of the bot agent
+       /// </summary>
+       /// <example>Finance-Bot-01</example>
+       [Required]
+       public string Name { get; set; }
+       
+       /// <summary>
+       /// The name of the machine where the bot agent will run
+       /// </summary>
+       /// <example>FINANCE-PC-01</example>
+       [Required]
+       public string MachineName { get; set; }
+   }
+   ```
+
+3. **Use Status Code Attributes**:
+   ```csharp
+   [ProducesResponseType(typeof(AssetResponse), StatusCodes.Status200OK)]
+   [ProducesResponseType(StatusCodes.Status404NotFound)]
+   ```
+
+4. **Add API Endpoint Grouping**:
+   ```csharp
+   [ApiController]
+   [Route("{tenant}/api/[controller]")]
+   [ApiExplorerSettings(GroupName = "Bot Agents")]
+   public class BotAgentsController : ControllerBase
+   ```
+
+5. **Configure API Versions** (if using versioning):
+   ```csharp
+   [ApiVersion("1.0")]
+   [Route("api/v{version:apiVersion}/[controller]")]
+   ```
+
+By following these documentation practices, the Swagger UI will provide comprehensive information about your API endpoints, making it easier for developers to understand and consume your API.

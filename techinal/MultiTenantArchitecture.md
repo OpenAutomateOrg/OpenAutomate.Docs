@@ -35,8 +35,44 @@ public class OrganizationUnit : BaseEntity
     public virtual ICollection<AutomationPackage> AutomationPackages { get; set; }
     public virtual ICollection<Execution> Executions { get; set; }
     public virtual ICollection<Schedule> Schedules { get; set; }
+    public virtual ICollection<Authority> Authorities { get; set; }
 }
 ```
+
+### Tenant-Specific Entities
+
+All tenant-specific entities include a reference to their tenant:
+
+```csharp
+public class Authority : BaseEntity
+{
+    [Required]
+    public string Name { set; get; }
+    
+    [Required]
+    public Guid OrganizationUnitId { get; set; }
+    
+    [ForeignKey("OrganizationUnitId")]
+    public OrganizationUnit OrganizationUnit { get; set; }
+    
+    // Navigation properties
+    public ICollection<AuthorityResource> AuthorityResources { get; set; }
+    public ICollection<UserAuthority> UserAuthorities { get; set; }
+}
+```
+
+All tenant-specific entities are accessed through the UnitOfWork pattern, including:
+
+- Users
+- BotAgents
+- AutomationPackages
+- Schedules
+- Executions
+- Authorities (roles)
+- User Authorities (role assignments)
+- Authority Resources (permissions)
+
+This ensures consistent architectural patterns across the entire application.
 
 ### 2. Tenant Resolution Middleware
 
@@ -133,18 +169,33 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
         
-        // Apply global query filters for tenant isolation
-        modelBuilder.Entity<BotAgent>()
-            .HasQueryFilter(b => b.OrganizationUnitId == _tenantContext.CurrentTenantId);
+        // Apply global query filters for multi-tenant entities
+        modelBuilder.Entity<OrganizationUnitUser>()
+            .HasQueryFilter(ouu => ouu.OrganizationUnitId == _tenantContext.CurrentTenantId);
             
-        modelBuilder.Entity<AutomationPackage>()
+        modelBuilder.Entity<Authority>()
             .HasQueryFilter(a => a.OrganizationUnitId == _tenantContext.CurrentTenantId);
             
-        modelBuilder.Entity<Execution>()
-            .HasQueryFilter(e => e.OrganizationUnitId == _tenantContext.CurrentTenantId);
+        modelBuilder.Entity<UserAuthority>()
+            .HasQueryFilter(ua => ua.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            
+        modelBuilder.Entity<AuthorityResource>()
+            .HasQueryFilter(ar => ar.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            
+        modelBuilder.Entity<BotAgent>()
+            .HasQueryFilter(ba => ba.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            
+        modelBuilder.Entity<AutomationPackage>()
+            .HasQueryFilter(ap => ap.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            
+        modelBuilder.Entity<PackageVersion>()
+            .HasQueryFilter(pv => pv.Package.OrganizationUnitId == _tenantContext.CurrentTenantId);
             
         modelBuilder.Entity<Schedule>()
-            .HasQueryFilter(s => s.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            .HasQueryFilter(s => s.Package.OrganizationUnitId == _tenantContext.CurrentTenantId);
+            
+        modelBuilder.Entity<Execution>()
+            .HasQueryFilter(e => e.PackageVersion.Package.OrganizationUnitId == _tenantContext.CurrentTenantId);
             
         // Configure relationships
         // ...
@@ -243,21 +294,21 @@ public class OrganizationUnitUser
 
 ## Implementation Steps
 
-1. Enhance the `OrganizationUnit` entity with tenant-specific fields.
+1. ✅ Enhance the `OrganizationUnit` entity with tenant-specific fields.
 
-2. Modify all tenant-specific entities to include `OrganizationUnitId`.
+2. ✅ Modify all tenant-specific entities to include `OrganizationUnitId`.
 
-3. Implement the TenantResolutionMiddleware.
+3. ✅ Implement the TenantResolutionMiddleware.
 
-4. Create the ITenantContext interface and implementation.
+4. ✅ Create the ITenantContext interface and implementation.
 
-5. Update the ApplicationDbContext to apply tenant filtering.
+5. ✅ Update the ApplicationDbContext to apply tenant filtering.
 
-6. Modify repositories to respect tenant context.
+6. ✅ Modify repositories to respect tenant context.
 
-7. Update authentication to include tenant information in tokens.
+7. ⬜ Update authentication to include tenant information in tokens.
 
-8. Add tenant-aware authorization policies.
+8. ⬜ Add tenant-aware authorization policies.
 
 ## Performance Considerations
 
